@@ -3,7 +3,7 @@ version: '3'
 tasks:
   gen-ebpf:
     sources:
-      - '*.{c,h}'
+      - 'bpf/**'
     generates:
       - '*.o'
     cmds:
