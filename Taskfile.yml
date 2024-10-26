@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  gen-ebpf:
+    sources:
+      - '*.{c,h}'
+    generates:
+      - '*.o'
+    cmds:
+      - go generate
+  dev:
+    deps:
+      - gen-ebpf
+    cmds:
+      - go build
+      - sudo ./{{.BIN_NAME}}
+  build:
+    deps:
+      - gen-ebpf
+    cmds:
+      - go build -o build/{{.BIN_NAME}}
+  run:
+    deps:
+      - build
+    cmds:
+      - sudo ./build/{{.BIN_NAME}}
+
+vars:
+  BIN_NAME: ebpf-test
