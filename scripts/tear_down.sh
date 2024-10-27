@@ -3,7 +3,8 @@ set -ex
 
 echo "🛠️ Tearing down..."
 
-ip netns del ns1
-ip netns del ns2
+for ns in ns1 ns2 ns3 ns4; do
+  ip netns del $ns
+done
 
 echo "✅ Successfully torn down!"
