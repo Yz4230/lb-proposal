@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
@@ -43,21 +46,75 @@ func main() {
 
 	// Periodically fetch the packet counter from PktCount,
 	// exit the program when interrupted.
-	tick := time.Tick(time.Second)
-	stop := make(chan os.Signal, 5)
-	signal.Notify(stop, os.Interrupt)
-	for {
-		select {
-		case <-tick:
-			var count uint64
-			err := objs.PktCount.Lookup(uint32(0), &count)
-			if err != nil {
-				log.Fatal("Map lookup:", err)
+
+	wg := &sync.WaitGroup{}
+
+	stop := make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tick := time.Tick(time.Second)
+		for {
+			select {
+			case <-tick:
+				var count uint64
+				if err := objs.PktCount.Lookup(uint32(0), &count); err != nil {
+					log.Fatal("Map lookup:", err)
+				}
+				log.Printf("Received %d packets", count)
+			case <-stop:
+				log.Println("Stopping packet counter")
+				return
 			}
-			log.Printf("Received %d packets", count)
-		case <-stop:
-			log.Print("Received signal, exiting..")
-			return
 		}
-	}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r, err := perf.NewReader(objs.LogEntries, os.Getpagesize())
+		if err != nil {
+			log.Fatalf("Failed to create perf event reader: %v", err)
+		}
+		defer r.Close()
+		evCh := make(chan []byte)
+
+		stopped := false
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for !stopped {
+				r.SetDeadline(time.Now().Add(500 * time.Millisecond))
+				ev, err := r.Read()
+				if errors.Is(err, os.ErrDeadlineExceeded) {
+					continue
+				}
+				if err != nil {
+					log.Fatalf("Failed to read perf event: %v", err)
+				}
+				evCh <- ev.RawSample
+			}
+		}()
+
+		for {
+			select {
+			case ev := <-evCh:
+				log.Printf("Received event: %s", ev)
+			case <-stop:
+				log.Println("Stopping event reader")
+				stopped = true
+				<-done
+				return
+			}
+		}
+	}()
+
+	interrupt := make(chan os.Signal, 5)
+	signal.Notify(interrupt, os.Interrupt)
+
+	// Wait for the program to be interrupted.
+	<-interrupt
+	close(stop)
+
+	wg.Wait()
 }

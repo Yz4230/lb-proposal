@@ -16,6 +16,13 @@ struct {
   __uint(max_entries, 1);
 } pkt_count SEC(".maps");
 
+struct {
+  __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+  __uint(max_entries, 128);
+  __uint(key_size, sizeof(__u32));
+  __uint(value_size, sizeof(__u32));
+} log_entries SEC(".maps");
+
 static __always_inline void increment_counter() {
   __u32 key = 0;
   __u64 *count = bpf_map_lookup_elem(&pkt_count, &key);
@@ -24,6 +31,20 @@ static __always_inline void increment_counter() {
 
 #define IPv6HDR_LEN sizeof(struct ipv6hdr)
 #define ICMPv6_CSUM_OFF offsetof(struct icmp6hdr, icmp6_cksum)
+
+// ユーザー空間にログを出力するための関数
+// Note: 引数はu64型にキャストされている必要がある
+#define ulogf(fmt, args...)                                                    \
+  ({                                                                           \
+    static const char _fmt[] = fmt;                                            \
+    static char _buf[256];                                                     \
+    u64 _args[___bpf_narg(args)];                                              \
+    ___bpf_fill(_args, args);                                                  \
+    int _len = bpf_snprintf(_buf, sizeof(_buf), _fmt, _args, sizeof(_args));   \
+    if (_len < sizeof(_buf)) {                                                 \
+      bpf_perf_event_output(skb, &log_entries, BPF_F_CURRENT_CPU, _buf, _len); \
+    }                                                                          \
+  })
 
 SEC("lwt_xmit/test_data")
 int do_test_data(struct __sk_buff *skb) {
@@ -36,13 +57,7 @@ int do_test_data(struct __sk_buff *skb) {
     return BPF_DROP;
   }
 
-  u64 ts = bpf_ktime_get_ns();
-
-  bpf_printk("-----[%llu]-----", ts);
-  bpf_printk("src: %pI6", &ip6h->saddr);
-  bpf_printk("dst: %pI6", &ip6h->daddr);
-
-  // If dst is fc00:a:ff::, reroute
+  ulogf("src: %pI6, dst: %pI6", (u64)&ip6h->saddr, (u64)&ip6h->daddr);
 
   // clang-format off
   static const struct in6_addr to_find = {

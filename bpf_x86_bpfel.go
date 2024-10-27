@@ -60,7 +60,8 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	PktCount *ebpf.MapSpec `ebpf:"pkt_count"`
+	LogEntries *ebpf.MapSpec `ebpf:"log_entries"`
+	PktCount   *ebpf.MapSpec `ebpf:"pkt_count"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -82,11 +83,13 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	PktCount *ebpf.Map `ebpf:"pkt_count"`
+	LogEntries *ebpf.Map `ebpf:"log_entries"`
+	PktCount   *ebpf.Map `ebpf:"pkt_count"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.LogEntries,
 		m.PktCount,
 	)
 }
