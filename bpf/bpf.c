@@ -1,4 +1,4 @@
-//go:build ignore
+// go:build ignore
 
 #include "net_shared.h"
 #include "vmlinux.h"
@@ -9,7 +9,20 @@
 #include <string.h>
 // clang-format on
 
-SEC("test_data")
+struct {
+  __uint(type, BPF_MAP_TYPE_ARRAY);
+  __type(key, __u32);
+  __type(value, __u64);
+  __uint(max_entries, 1);
+} pkt_count SEC(".maps");
+
+static __always_inline void increment_counter() {
+  __u32 key = 0;
+  __u64 *count = bpf_map_lookup_elem(&pkt_count, &key);
+  if (count) __sync_fetch_and_add(count, 1);
+}
+
+SEC("lwt_xmit/test_data")
 int do_test_data(struct __sk_buff *skb) {
   void *data = (void *)(long)skb->data;
   void *data_end = (void *)(long)skb->data_end;
@@ -49,6 +62,8 @@ int do_test_data(struct __sk_buff *skb) {
       return BPF_DROP;
     }
 
+    increment_counter();
+
     // Reload data pointers after modifying the packet
     data = (void *)(long)skb->data;
     data_end = (void *)(long)skb->data_end;
@@ -59,30 +74,30 @@ int do_test_data(struct __sk_buff *skb) {
       bpf_printk("packet truncated after modification");
       return BPF_DROP;
     }
-  }
 
-  const struct in6_addr new_dst = ip6h->daddr;
+    const struct in6_addr new_dst = ip6h->daddr;
 
-  if (ip6h->nexthdr == IPPROTO_ICMPV6) {
-    const int off =
-        sizeof(struct ipv6hdr) + offsetof(struct icmp6hdr, icmp6_cksum);
+    if (ip6h->nexthdr == IPPROTO_ICMPV6) {
+      const int off =
+          sizeof(struct ipv6hdr) + offsetof(struct icmp6hdr, icmp6_cksum);
 
-    for (int i = 0; i < 4; i++) {
-      u32 from = old_dst.in6_u.u6_addr32[i];
-      u32 to = new_dst.in6_u.u6_addr32[i];
+      for (int i = 0; i < 4; i++) {
+        u32 from = old_dst.in6_u.u6_addr32[i];
+        u32 to = new_dst.in6_u.u6_addr32[i];
 
-      if (bpf_l4_csum_replace(skb, off, from, to, BPF_F_PSEUDO_HDR | 2) < 0) {
-        bpf_printk("l4 csum replace failed");
-        return BPF_DROP;
-      }
+        if (bpf_l4_csum_replace(skb, off, from, to, BPF_F_PSEUDO_HDR | 2) < 0) {
+          bpf_printk("l4 csum replace failed");
+          return BPF_DROP;
+        }
 
-      data = (void *)(long)skb->data;
-      data_end = (void *)(long)skb->data_end;
-      ip6h = data;
+        data = (void *)(long)skb->data;
+        data_end = (void *)(long)skb->data_end;
+        ip6h = data;
 
-      if (data + sizeof(*ip6h) > data_end) {
-        bpf_printk("packet truncated after modification");
-        return BPF_DROP;
+        if (data + sizeof(*ip6h) > data_end) {
+          bpf_printk("packet truncated after modification");
+          return BPF_DROP;
+        }
       }
     }
   }

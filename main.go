@@ -7,8 +7,9 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 )
 
 func main() {
@@ -18,29 +19,27 @@ func main() {
 	}
 
 	// Load the compiled eBPF ELF and load it into the kernel.
-	var objs counterObjects
-	if err := loadCounterObjects(&objs, nil); err != nil {
+	var objs bpfObjects
+	if err := loadBpfObjects(&objs, nil); err != nil {
 		log.Fatal("Loading eBPF objects:", err)
 	}
 	defer objs.Close()
 
-	ifname := "eno1" // Change this to an interface on your machine.
-	iface, err := net.InterfaceByName(ifname)
-	if err != nil {
-		log.Fatalf("Getting interface %s: %s", ifname, err)
+	target := net.ParseIP("fc00:a:ff::")
+	bpfEncap := &netlink.BpfEncap{}
+	bpfEncap.SetProg(nl.LWT_BPF_XMIT, objs.DoTestData.FD(), "lwt_xmit/test_data")
+	route := netlink.Route{
+		Dst: &net.IPNet{
+			IP:   target,
+			Mask: net.CIDRMask(48, 128),
+		},
+		Encap: bpfEncap,
+		Gw:    target,
 	}
 
-	// Attach count_packets to the network interface.
-	link, err := link.AttachXDP(link.XDPOptions{
-		Program:   objs.CountPackets,
-		Interface: iface.Index,
-	})
-	if err != nil {
-		log.Fatal("Attaching XDP:", err)
+	if err := netlink.RouteAdd(&route); err != nil {
+		log.Fatalf("Failed to add route: %v", err)
 	}
-	defer link.Close()
-
-	log.Printf("Counting incoming packets on %s..", ifname)
 
 	// Periodically fetch the packet counter from PktCount,
 	// exit the program when interrupted.

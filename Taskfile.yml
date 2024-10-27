@@ -1,19 +1,13 @@
-version: '3'
+version: "3"
 
 tasks:
   gen-ebpf:
     sources:
-      - 'bpf/**'
+      - "bpf/**"
     generates:
-      - '*.o'
+      - "*.o"
     cmds:
       - go generate
-  dev:
-    deps:
-      - gen-ebpf
-    cmds:
-      - go build
-      - sudo ./{{.BIN_NAME}}
   build:
     deps:
       - gen-ebpf
@@ -23,7 +17,11 @@ tasks:
     deps:
       - build
     cmds:
-      - sudo ./build/{{.BIN_NAME}}
+      - sudo ./scripts/tear_up.sh
+      - sudo ip netns exec ns1 ./build/{{.BIN_NAME}}
+  down:
+    cmds:
+      - sudo ./scripts/tear_down.sh
 
 vars:
   BIN_NAME: ebpf-test
