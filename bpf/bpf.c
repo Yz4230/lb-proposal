@@ -22,6 +22,9 @@ static __always_inline void increment_counter() {
   if (count) __sync_fetch_and_add(count, 1);
 }
 
+#define IPv6HDR_LEN sizeof(struct ipv6hdr)
+#define ICMPv6_CSUM_OFF offsetof(struct icmp6hdr, icmp6_cksum)
+
 SEC("lwt_xmit/test_data")
 int do_test_data(struct __sk_buff *skb) {
   void *data = (void *)(long)skb->data;
@@ -78,8 +81,7 @@ int do_test_data(struct __sk_buff *skb) {
     const struct in6_addr new_dst = ip6h->daddr;
 
     if (ip6h->nexthdr == IPPROTO_ICMPV6) {
-      const int off =
-          sizeof(struct ipv6hdr) + offsetof(struct icmp6hdr, icmp6_cksum);
+      const int off = IPv6HDR_LEN + ICMPv6_CSUM_OFF;
 
       for (int i = 0; i < 4; i++) {
         u32 from = old_dst.in6_u.u6_addr32[i];
