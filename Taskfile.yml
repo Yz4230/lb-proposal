@@ -11,6 +11,10 @@ tasks:
   build:
     deps:
       - gen-ebpf
+    sources:
+      - "*.go"
+    generates:
+      - "build/{{.BIN_NAME}}"
     cmds:
       - go build -o build/{{.BIN_NAME}}
   run:
