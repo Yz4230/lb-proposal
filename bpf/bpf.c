@@ -11,10 +11,10 @@
 #include "utils.h"
 
 struct {
-  __uint(type, BPF_MAP_TYPE_ARRAY);
+  __uint(type, BPF_MAP_TYPE_HASH);
   __type(key, __u32);
   __type(value, __u64);
-  __uint(max_entries, 1);
+  __uint(max_entries, 16);
 } tx_bytes_per_sec SEC(".maps");
 
 SEC("lwt_xmit/test_data")
@@ -29,6 +29,12 @@ int do_test_data(struct __sk_buff *skb) {
   }
 
   ulogf("Packet: src=%pI6, dst=%pI6", (u64)&ip6h->saddr, (u64)&ip6h->daddr);
+
+  // read and log tx bytes
+  u32 key = skb->ifindex;
+  ulogf("ifindex=%u", key);
+  u64 *tx_bytes = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
+  if (tx_bytes) ulogf("tx_bytes=%llu", *tx_bytes);
 
   u16 func = SID_FUNC(&ip6h->daddr);
   u64 arg = SID_ARG(&ip6h->daddr);

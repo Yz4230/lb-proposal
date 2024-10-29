@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"time"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
@@ -47,6 +49,33 @@ func main() {
 	go func() {
 		defer wg.Done()
 		handleULogF(stop, objs.LogEntries)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timer := time.NewTicker(1 * time.Second)
+		lastStats := make(map[int]*netlink.LinkStatistics) // map index -> stats
+		for {
+			select {
+			case <-timer.C:
+				links, err := netlink.LinkList()
+				if err != nil {
+					log.Fatalf("Failed to list links: %v", err)
+				}
+				for _, link := range links {
+					attrs := link.Attrs()
+					if lastStat, ok := lastStats[attrs.Index]; ok {
+						diff := attrs.Statistics.TxBytes - lastStat.TxBytes
+						log.Printf("Link %s(%d) TxBytes: %d", attrs.Name, attrs.Index, diff)
+						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
+					}
+					lastStats[attrs.Index] = attrs.Statistics
+				}
+			case <-stop:
+				return
+			}
+		}
 	}()
 
 	interrupt := make(chan os.Signal, 5)
