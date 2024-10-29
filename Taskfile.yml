@@ -23,6 +23,7 @@ tasks:
       - build
     cmds:
       - sudo ./scripts/tear_up.sh
+      - sudo ./scripts/insert_srfunc_route.sh
       - sudo ip netns exec ns1 ./build/{{.BIN_NAME}}
   down:
     cmds:

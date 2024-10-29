@@ -30,16 +30,22 @@ int do_test_data(struct __sk_buff *skb) {
 
   ulogf("Packet: src=%pI6, dst=%pI6", (u64)&ip6h->saddr, (u64)&ip6h->daddr);
 
-  // read and log tx bytes
-  u32 key = skb->ifindex;
-  ulogf("ifindex=%u", key);
-  u64 *tx_bytes = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
-  if (tx_bytes) ulogf("tx_bytes=%llu", *tx_bytes);
-
   u16 func = SID_FUNC(&ip6h->daddr);
   u64 arg = SID_ARG(&ip6h->daddr);
 
   if (func == 0x8000) {
+    // 8 8 8 8 16
+    // skip_num metrics comparator nic_index bps
+    u8 num_skip = (arg >> 40) & 0xff;
+    u8 metrics = (arg >> 32) & 0xff;
+    u8 comparator = (arg >> 24) & 0xff;
+    u8 nic_index = (arg >> 16) & 0xff;
+    u16 bps = arg & 0xffff;
+    ulogf(
+        "SRH found: func=%04x, skip_num=%u, metrics=%u, comparator=%u, "
+        "nic_index=%u, bps=%u",
+        func, num_skip, metrics, comparator, nic_index, bps);
+
     // check if payload has SRv6 header
     if (ip6h->nexthdr == IPPROTO_ROUTING) {
       struct ipv6_sr_hdr *sr_hdr = (struct ipv6_sr_hdr *)(ip6h + 1);
@@ -51,26 +57,55 @@ int do_test_data(struct __sk_buff *skb) {
       // check if the type is SRH
       if (sr_hdr->type != 4) return BPF_DROP;
 
-      ulogf("SRH found: func=%04x, arg=%012x", func, arg);
+      bool match = false;
+      if (metrics == 0) {
+        u64 key = nic_index;
+        u64 *matrics_value = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
+        if (!matrics_value) return BPF_DROP;
+        if (comparator == 0)
+          match = (*matrics_value == bps);
+        else if (comparator == 1)
+          match = (*matrics_value > bps);
+        else if (comparator == 2)
+          match = (*matrics_value < bps);
+        ulogf("match=%d, matrics_value=%llu, bps=%u", match, *matrics_value,
+              bps);
+      }
 
       if (sr_hdr->segments_left == 0) return BPF_DROP;
       u8 new_segments_left = sr_hdr->segments_left - 1;
-      struct in6_addr *new_dst_ptr = sr_hdr->segments + new_segments_left;
+      bool should_decap = false;
+      if (match) {
+        if (new_segments_left >= num_skip) {
+          new_segments_left -= num_skip;
+        } else {
+          should_decap = true;
+        }
+      };
 
-      if ((void *)(new_dst_ptr + 1) > data_end) {
-        bpf_printk("packet truncated");
+      if (should_decap) {
+        // // decap the SRH
+        // if ((void *)(sr_hdr->segments + 1) > data_end) return BPF_DROP;
+        // // struct in6_addr localhost = {.in6_u.u6_addr32 = {0, 0, 0, 1}};
+        // // fc00:a:12:0:0001::
+        // struct in6_addr seg6_end = {.in6_u.u6_addr8 = {
+        //                                 // clang-format off
+        //   0xfc, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x12,
+        //   0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        //                                 // clang-format on
+        //                             }};
+        // ip6h->daddr = seg6_end;
+        // sr_hdr->segments[0] = seg6_end;
+        // sr_hdr->segments_left = 0;
         return BPF_DROP;
+      } else {
+        struct in6_addr *new_dst_ptr = sr_hdr->segments + new_segments_left;
+        if ((void *)(new_dst_ptr + 1) > data_end) return BPF_DROP;
+        ip6h->daddr = *new_dst_ptr;
+        sr_hdr->segments_left = new_segments_left;
       }
+      ulogf("Dst updated: new_dst=%pI6", (u64)&ip6h->daddr);
 
-      struct in6_addr new_dst = *new_dst_ptr;
-      ulogf("Dst updated: new_dst=%pI6", (u64)&new_dst);
-
-      bpf_skb_store_bytes(skb, offsetof(struct ipv6hdr, daddr), &new_dst, 16,
-                          0);
-      bpf_skb_store_bytes(
-          skb,
-          sizeof(struct ipv6hdr) + offsetof(struct ipv6_sr_hdr, segments_left),
-          &new_segments_left, 1, 0);
       return BPF_LWT_REROUTE;
     }
   }
