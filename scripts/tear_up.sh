@@ -59,26 +59,25 @@ echo "🔗 Up interfaces!"
 # - ns1: veth1-3 (fc00:b:13::/32) <-> ns3: veth3-1 (fc00:b:31::/32)
 # - ns1: veth1-4 (fc00:c:14::/32) <-> ns4: veth4-1 (fc00:c:41::/32)
 
-ip netns exec ns1 ip -6 route add fc00:a::/32 via fc00:a:21::
-ip netns exec ns1 ip -6 route add fc00:b::/32 via fc00:b:31::
-ip netns exec ns1 ip -6 route add fc00:c::/32 via fc00:c:41::
-ip netns exec ns2 ip -6 route add fc00:a::/32 via fc00:a:12::
-ip netns exec ns2 ip -6 route add fc00:b::/32 via fc00:a:12::
-ip netns exec ns2 ip -6 route add fc00:c::/32 via fc00:a:12::
-ip netns exec ns3 ip -6 route add fc00:a::/32 via fc00:b:13::
-ip netns exec ns3 ip -6 route add fc00:b::/32 via fc00:b:13::
-ip netns exec ns3 ip -6 route add fc00:c::/32 via fc00:b:13::
-ip netns exec ns4 ip -6 route add fc00:a::/32 via fc00:c:14::
-ip netns exec ns4 ip -6 route add fc00:b::/32 via fc00:c:14::
-ip netns exec ns4 ip -6 route add fc00:c::/32 via fc00:c:14::
+# ip netns exec ns1 ip -6 route add fc00:a::/32 via fc00:a:21:: metric 1
+# ip netns exec ns1 ip -6 route add fc00:b::/32 via fc00:b:31:: metric 1
+# ip netns exec ns1 ip -6 route add fc00:c::/32 via fc00:c:41:: metric 1
+ip netns exec ns2 ip -6 route add fc00:b::/32 via fc00:a:12:: metric 1
+ip netns exec ns2 ip -6 route add fc00:c::/32 via fc00:a:12:: metric 1
+# ip netns exec ns2 ip -6 route add fc00:a::/32 via fc00:a:12:: metric 1
+ip netns exec ns3 ip -6 route add fc00:a::/32 via fc00:b:13:: metric 1
+ip netns exec ns3 ip -6 route add fc00:c::/32 via fc00:b:13:: metric 1
+# ip netns exec ns3 ip -6 route add fc00:b::/32 via fc00:b:13:: metric 1
+ip netns exec ns4 ip -6 route add fc00:a::/32 via fc00:c:14:: metric 1
+ip netns exec ns4 ip -6 route add fc00:b::/32 via fc00:c:14:: metric 1
+# ip netns exec ns4 ip -6 route add fc00:c::/32 via fc00:c:14:: metric 1
 echo "🔗 Set up routing!"
 
-sleep 2
-
-# ping test
-# ns2 -> ns3
-ip netns exec ns2 ping6 -c 3 fc00:b:31::
-# ns3 -> ns4
-ip netns exec ns3 ping6 -c 3 fc00:c:41::
-# ns4 -> ns2
-ip netns exec ns4 ping6 -c 3 fc00:a:21::
+# # ping test
+# sleep 2
+# # ns2 -> ns3
+# ip netns exec ns2 ping6 -c 3 fc00:b:31::
+# # ns3 -> ns4
+# ip netns exec ns3 ping6 -c 3 fc00:c:41::
+# # ns4 -> ns2
+# ip netns exec ns4 ping6 -c 3 fc00:a:21::

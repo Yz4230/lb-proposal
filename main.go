@@ -29,46 +29,23 @@ func main() {
 	}
 	defer objs.Close()
 
-	target := net.ParseIP("fc00:a:ff::")
+	// fc00:a:12:0:8000::/80
+	target := &net.IPNet{IP: net.ParseIP("fc00:a:12:0:8000::"), Mask: net.CIDRMask(80, 128)}
 	bpfEncap := &netlink.BpfEncap{}
 	bpfEncap.SetProg(nl.LWT_BPF_XMIT, objs.DoTestData.FD(), "lwt_xmit/test_data")
 	route := netlink.Route{
-		Dst: &net.IPNet{
-			IP:   target,
-			Mask: net.CIDRMask(48, 128),
-		},
-		Encap: bpfEncap,
-		Gw:    target,
+		Dst:      target,
+		Encap:    bpfEncap,
+		Gw:       net.ParseIP("fc00:a::"),
+		Priority: 1,
 	}
 
 	if err := netlink.RouteAdd(&route); err != nil {
 		log.Fatalf("Failed to add route: %v", err)
 	}
 
-	// Periodically fetch the packet counter from PktCount,
-	// exit the program when interrupted.
-
 	wg := &sync.WaitGroup{}
-
 	stop := make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		tick := time.Tick(time.Second)
-		for {
-			select {
-			case <-tick:
-				var count uint64
-				if err := objs.PktCount.Lookup(uint32(0), &count); err != nil {
-					log.Fatal("Map lookup:", err)
-				}
-				log.Printf("Received %d packets", count)
-			case <-stop:
-				log.Println("Stopping packet counter")
-				return
-			}
-		}
-	}()
 
 	wg.Add(1)
 	go func() {
@@ -114,7 +91,7 @@ func handleUsLogF(stop chan struct{}, m *ebpf.Map) {
 	for {
 		select {
 		case ev := <-evCh:
-			log.Printf("Received event: %s", ev)
+			log.Println(string(ev))
 		case <-stop:
 			log.Println("Stopping event reader")
 			stopped = true
