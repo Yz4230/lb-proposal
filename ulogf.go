@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/perf"
+	"github.com/fatih/color"
 )
 
 func handleULogF(stop chan struct{}, m *ebpf.Map) {
@@ -38,7 +39,7 @@ func handleULogF(stop chan struct{}, m *ebpf.Map) {
 	for {
 		select {
 		case ev := <-evCh:
-			log.Println(string(ev))
+			log.Printf(color.YellowString(string(ev)))
 		case <-stop:
 			log.Println("Stopping event reader")
 			stopped = true
