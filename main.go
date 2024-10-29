@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,15 +65,17 @@ func main() {
 				if err != nil {
 					log.Fatalf("Failed to list links: %v", err)
 				}
+				var logs []string
 				for _, link := range links {
 					attrs := link.Attrs()
 					if lastStat, ok := lastStats[attrs.Index]; ok {
 						diff := attrs.Statistics.TxBytes - lastStat.TxBytes
-						log.Printf("Link %s(%d) TxBytes: %d", attrs.Name, attrs.Index, diff)
 						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
+						logs = append(logs, fmt.Sprintf("%s: %d", attrs.Name, diff))
 					}
 					lastStats[attrs.Index] = attrs.Statistics
 				}
+				log.Printf("Link stats: %s", strings.Join(logs, ", "))
 			case <-stop:
 				return
 			}
