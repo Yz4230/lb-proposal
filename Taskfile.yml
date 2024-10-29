@@ -3,7 +3,7 @@ version: "3"
 tasks:
   gen-ebpf:
     sources:
-      - "bpf/**"
+      - "bpf/*.c"
     generates:
       - "*.o"
     cmds:
@@ -13,6 +13,7 @@ tasks:
       - gen-ebpf
     sources:
       - "*.go"
+      - "*.o"
     generates:
       - "build/{{.BIN_NAME}}"
     cmds:
