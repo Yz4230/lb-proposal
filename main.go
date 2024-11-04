@@ -17,13 +17,14 @@ import (
 )
 
 type CLArgs struct {
-	Prefix *net.IPNet
-	Gw     net.IP
+	Prefix   *net.IPNet
+	Gw       net.IP
+	Interval time.Duration
 }
 
 func parseArgs(ca *CLArgs) {
-	if len(os.Args) != 3 {
-		log.Fatalf("Usage: %s <prefix> <gw>", os.Args[0])
+	if len(os.Args) != 4 {
+		log.Fatalf("Usage: %s <prefix> <gw> <interval>", os.Args[0])
 	}
 	_, prefix, err := net.ParseCIDR(os.Args[1])
 	if err != nil {
@@ -36,6 +37,12 @@ func parseArgs(ca *CLArgs) {
 		log.Fatalf("Failed to parse gw: %v", err)
 	}
 	ca.Gw = gw
+
+	interval, err := time.ParseDuration(os.Args[3])
+	if err != nil {
+		log.Fatalf("Failed to parse interval: %v", err)
+	}
+	ca.Interval = interval
 }
 
 func main() {
@@ -79,7 +86,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		timer := time.NewTicker(1 * time.Second)
+		timer := time.NewTicker(clArgs.Interval)
 		lastStats := make(map[int]*netlink.LinkStatistics) // map index -> stats
 		for {
 			select {
