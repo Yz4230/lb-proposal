@@ -38,7 +38,7 @@ int do_test_data(struct __sk_buff *skb) {
   u16 func = SID_FUNC(&ip6h->daddr);
   u64 arg = SID_ARG(&ip6h->daddr);
 
-  if (func == 0x8000) {
+  if (func == 0x8000) {  // skip_segments_if
     // 8 8 8 8 16
     // skip_num metrics comparator nic_index bps
     u8 num_skip = (arg >> 40) & 0xff;
@@ -55,7 +55,10 @@ int do_test_data(struct __sk_buff *skb) {
     if (metrics == 0) {
       u64 key = nic_index;
       u64 *matrics_value = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
-      if (!matrics_value) return BPF_DROP;
+      if (!matrics_value) {
+        ulogf("metrics not found: nic_index=%u", nic_index);
+        return BPF_DROP;
+      }
       if (comparator == 0)
         match = (*matrics_value == bps);
       else if (comparator == 1)
@@ -90,6 +93,33 @@ int do_test_data(struct __sk_buff *skb) {
       // ip6h->daddr = seg6_end;
       // sr_hdr->segments[0] = seg6_end;
       // sr_hdr->segments_left = 0;
+      return BPF_DROP;
+    } else {
+      struct in6_addr *new_dst_ptr = sr_hdr->segments + new_segments_left;
+      if ((void *)(new_dst_ptr + 1) > data_end) return BPF_DROP;
+      ip6h->daddr = *new_dst_ptr;
+      sr_hdr->segments_left = new_segments_left;
+    }
+    ulogf("Dst updated: new_dst=%pI6", (u64)&ip6h->daddr);
+
+    return BPF_LWT_REROUTE;
+  } else if (func == 0x8001) {  // just_skip_segments
+    // 8 40
+    // skip_num (zero)
+    u8 num_skip = (arg >> 40) & 0xff;
+    ulogf("SRH found: func=%04x, skip_num=%u", func, num_skip);
+
+    if (sr_hdr->segments_left == 0) return BPF_DROP;
+    u8 new_segments_left = sr_hdr->segments_left - 1;
+    bool should_decap = false;
+    if (new_segments_left >= num_skip) {
+      new_segments_left -= num_skip;
+    } else {
+      should_decap = true;
+    }
+
+    if (should_decap) {
+      // not support decap
       return BPF_DROP;
     } else {
       struct in6_addr *new_dst_ptr = sr_hdr->segments + new_segments_left;
