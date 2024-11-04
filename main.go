@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
+	"maps"
 	"net"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -86,28 +88,32 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		timer := time.NewTicker(clArgs.Interval)
+		statTimer := time.NewTicker(clArgs.Interval)
+		logTimer := time.NewTicker(1 * time.Second)
 		lastStats := make(map[int]*netlink.LinkStatistics) // map index -> stats
 		for {
 			select {
-			case <-timer.C:
+			case <-statTimer.C:
 				links, err := netlink.LinkList()
 				if err != nil {
 					log.Fatalf("Failed to list links: %v", err)
 				}
-				var logs []string
 				for _, link := range links {
 					attrs := link.Attrs()
 					if lastStat, ok := lastStats[attrs.Index]; ok {
 						diff := attrs.Statistics.TxBytes - lastStat.TxBytes
 						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
-						logs = append(logs, fmt.Sprintf("%s(%d): %d", attrs.Name, attrs.Index, diff))
 					}
 					lastStats[attrs.Index] = attrs.Statistics
 				}
-				if len(logs) > 0 {
-					log.Printf("Link stats: %s", strings.Join(logs, ", "))
+			case <-logTimer.C:
+				indices := slices.Sorted(maps.Keys(lastStats))
+				parts := make([]string, 0, len(indices))
+				for _, idx := range indices {
+					txBytes := lastStats[idx].TxBytes
+					parts = append(parts, fmt.Sprintf("%d: %s", idx, humanizeSize(txBytes)))
 				}
+				log.Println(strings.Join(parts, ", "))
 			case <-stop:
 				return
 			}
@@ -126,4 +132,24 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func humanizeSize(size uint64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+	size /= 1024
+	if size < 1024 {
+		return fmt.Sprintf("%d KiB", size)
+	}
+	size /= 1024
+	if size < 1024 {
+		return fmt.Sprintf("%d MiB", size)
+	}
+	size /= 1024
+	if size < 1024 {
+		return fmt.Sprintf("%d GiB", size)
+	}
+	size /= 1024
+	return fmt.Sprintf("%d TiB", size)
 }
