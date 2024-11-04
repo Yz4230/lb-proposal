@@ -30,13 +30,16 @@ func main() {
 	defer objs.Close()
 
 	// fc00:a:12:0:8000::/80
-	target := &net.IPNet{IP: net.ParseIP("fc00:a:12:0:8000::"), Mask: net.CIDRMask(80, 128)}
+	target := &net.IPNet{IP: net.ParseIP(os.Args[1]), Mask: net.CIDRMask(64, 128)}
+	gw := net.ParseIP(os.Args[2])
+
+	fmt.Printf("target=%s, gw=%s\n", target, gw)
 	bpfEncap := &netlink.BpfEncap{}
 	bpfEncap.SetProg(nl.LWT_BPF_XMIT, objs.DoTestData.FD(), "lwt_xmit/test_data")
 	route := netlink.Route{
 		Dst:      target,
 		Encap:    bpfEncap,
-		Gw:       net.ParseIP("fc00:a::"),
+		Gw:       gw,
 		Priority: 1,
 	}
 
@@ -71,7 +74,7 @@ func main() {
 					if lastStat, ok := lastStats[attrs.Index]; ok {
 						diff := attrs.Statistics.TxBytes - lastStat.TxBytes
 						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
-						logs = append(logs, fmt.Sprintf("%s: %d", attrs.Name, diff))
+						logs = append(logs, fmt.Sprintf("%s(%d): %d", attrs.Name, attrs.Index, diff))
 					}
 					lastStats[attrs.Index] = attrs.Statistics
 				}
@@ -88,6 +91,10 @@ func main() {
 	// Wait for the program to be interrupted.
 	<-interrupt
 	close(stop)
+
+	if err := netlink.RouteDel(&route); err != nil {
+		log.Fatalf("Failed to delete route: %v", err)
+	}
 
 	wg.Wait()
 }

@@ -55,7 +55,10 @@ int do_test_data(struct __sk_buff *skb) {
     if (metrics == 0) {
       u64 key = nic_index;
       u64 *matrics_value = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
-      if (!matrics_value) return BPF_DROP;
+      if (!matrics_value) {
+        ulogf("metrics not found: nic_index=%u", nic_index);
+        return BPF_DROP;
+      }
       if (comparator == 0)
         match = (*matrics_value == bps);
       else if (comparator == 1)
@@ -124,6 +127,9 @@ int do_test_data(struct __sk_buff *skb) {
       ip6h->daddr = *new_dst_ptr;
       sr_hdr->segments_left = new_segments_left;
     }
+    ulogf("Dst updated: new_dst=%pI6", (u64)&ip6h->daddr);
+
+    return BPF_LWT_REROUTE;
   }
 
   return BPF_OK;
