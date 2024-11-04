@@ -16,7 +16,32 @@ import (
 	"github.com/vishvananda/netlink/nl"
 )
 
+type CLArgs struct {
+	Prefix *net.IPNet
+	Gw     net.IP
+}
+
+func parseArgs(ca *CLArgs) {
+	if len(os.Args) != 3 {
+		log.Fatalf("Usage: %s <prefix> <gw>", os.Args[0])
+	}
+	_, prefix, err := net.ParseCIDR(os.Args[1])
+	if err != nil {
+		log.Fatalf("Failed to parse prefix: %v", err)
+	}
+	ca.Prefix = prefix
+
+	gw := net.ParseIP(os.Args[2])
+	if gw == nil {
+		log.Fatalf("Failed to parse gw: %v", err)
+	}
+	ca.Gw = gw
+}
+
 func main() {
+	var clArgs CLArgs
+	parseArgs(&clArgs)
+
 	// Remove resource limits for kernels <5.11.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal("Removing memlock:", err)
@@ -29,17 +54,12 @@ func main() {
 	}
 	defer objs.Close()
 
-	// fc00:a:12:0:8000::/80
-	target := &net.IPNet{IP: net.ParseIP(os.Args[1]), Mask: net.CIDRMask(64, 128)}
-	gw := net.ParseIP(os.Args[2])
-
-	fmt.Printf("target=%s, gw=%s\n", target, gw)
 	bpfEncap := &netlink.BpfEncap{}
 	bpfEncap.SetProg(nl.LWT_BPF_XMIT, objs.DoTestData.FD(), "lwt_xmit/test_data")
 	route := netlink.Route{
-		Dst:      target,
+		Dst:      clArgs.Prefix,
 		Encap:    bpfEncap,
-		Gw:       gw,
+		Gw:       clArgs.Gw,
 		Priority: 1,
 	}
 
@@ -78,7 +98,9 @@ func main() {
 					}
 					lastStats[attrs.Index] = attrs.Statistics
 				}
-				log.Printf("Link stats: %s", strings.Join(logs, ", "))
+				if len(logs) > 0 {
+					log.Printf("Link stats: %s", strings.Join(logs, ", "))
+				}
 			case <-stop:
 				return
 			}

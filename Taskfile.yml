@@ -19,24 +19,12 @@ tasks:
     cmds:
       - go build -o build/{{.BIN_NAME}}
   up:
+    deps:
+      - build
     cmds:
       - sudo ./scripts/tear_up.sh
       - sudo ./scripts/insert_srfunc_route.sh
-  run-ns2:
-    deps:
-      - build
-    cmds:
-      - "sudo ip netns exec ns2 ./build/{{.BIN_NAME}} fc00:a:21:: fc00:a::"
-  run-ns5-d:
-    deps:
-      - build
-    cmds:
-      - "sudo ip netns exec ns5 ./build/{{.BIN_NAME}} fc00:d:53:: fc00:d::"
-  run-ns5-e:
-    deps:
-      - build
-    cmds:
-      - "sudo ip netns exec ns5 ./build/{{.BIN_NAME}} fc00:e:54:: fc00:e::"
+      - sudo ./scripts/insert_ebpf_routes.sh
   down:
     cmds:
       - sudo ./scripts/tear_down.sh
