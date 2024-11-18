@@ -75,6 +75,7 @@ func main() {
 	if err := netlink.RouteAdd(&route); err != nil {
 		log.Fatalf("Failed to add route: %v", err)
 	}
+	log.Printf("Added route: %s", route)
 
 	wg := &sync.WaitGroup{}
 	stop := make(chan struct{})
@@ -133,6 +134,7 @@ func main() {
 	if err := netlink.RouteDel(&route); err != nil {
 		log.Fatalf("Failed to delete route: %v", err)
 	}
+	log.Printf("Deleted route: %s", route)
 
 	wg.Wait()
 }
