@@ -86,14 +86,24 @@ func main() {
 		handleULogF(stop, objs.LogEntries)
 	}()
 
+	idxToName := make(map[int]string)
+	if links, err := netlink.LinkList(); err != nil {
+		log.Fatalf("Failed to list links: %v", err)
+	} else {
+		for _, link := range links {
+			attrs := link.Attrs()
+			idxToName[attrs.Index] = attrs.Name
+		}
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		window := uint64(clArgs.Interval.Milliseconds())
+		span := int(clArgs.Interval.Milliseconds())
 		statTimer := time.NewTicker(clArgs.Interval)
 		logTimer := time.NewTicker(1 * time.Second)
 		lastTxBytes := make(map[int]uint64) // map index -> tx bytes
-		lastDiff := make(map[int]uint64)    // map index -> metrics
+		emas := make(map[int]*EMA)          // map index -> EMA
 		for {
 			select {
 			case <-statTimer.C:
@@ -103,19 +113,31 @@ func main() {
 				}
 				for _, link := range links {
 					attrs := link.Attrs()
-					if lastTxByte, ok := lastTxBytes[attrs.Index]; ok {
-						diff := (attrs.Statistics.TxBytes - lastTxByte) / window
-						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
-						lastDiff[attrs.Index] = uint64(diff)
+
+					current := attrs.Statistics.TxBytes
+					var diff float64
+					if prev, ok := lastTxBytes[attrs.Index]; ok {
+						diff = float64(current-prev) / float64(span)
 					}
-					lastTxBytes[attrs.Index] = attrs.Statistics.TxBytes
+					lastTxBytes[attrs.Index] = current
+
+					ema, ok := emas[attrs.Index]
+					if !ok {
+						ema = NewEMA(span)
+						emas[attrs.Index] = ema
+					}
+					ema.Update(diff)
+					objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(ema.GetValue()), ebpf.UpdateAny)
 				}
 			case <-logTimer.C:
-				indices := slices.Sorted(maps.Keys(lastDiff))
+				indices := slices.Sorted(maps.Keys(emas))
 				parts := make([]string, 0, len(indices))
 				for _, idx := range indices {
-					diff := lastDiff[idx]
-					parts = append(parts, fmt.Sprintf("%d: %s/%s", idx, humanizeSize(diff), clArgs.Interval))
+					if ema, ok := emas[idx]; ok {
+						part := fmt.Sprintf("%s(%d): %s/%s",
+							idxToName[idx], idx, humanizeSize(uint64(ema.GetValue())), clArgs.Interval)
+						parts = append(parts, part)
+					}
 				}
 				log.Println(strings.Join(parts, ", "))
 			case <-stop:
