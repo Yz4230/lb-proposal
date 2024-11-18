@@ -88,9 +88,11 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		window := uint64(clArgs.Interval.Milliseconds())
 		statTimer := time.NewTicker(clArgs.Interval)
 		logTimer := time.NewTicker(1 * time.Second)
-		lastStats := make(map[int]*netlink.LinkStatistics) // map index -> stats
+		lastTxBytes := make(map[int]uint64) // map index -> tx bytes
+		lastDiff := make(map[int]uint64)    // map index -> metrics
 		for {
 			select {
 			case <-statTimer.C:
@@ -100,18 +102,19 @@ func main() {
 				}
 				for _, link := range links {
 					attrs := link.Attrs()
-					if lastStat, ok := lastStats[attrs.Index]; ok {
-						diff := attrs.Statistics.TxBytes - lastStat.TxBytes
+					if lastTxByte, ok := lastTxBytes[attrs.Index]; ok {
+						diff := (attrs.Statistics.TxBytes - lastTxByte) / window
 						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
+						lastDiff[attrs.Index] = uint64(diff)
 					}
-					lastStats[attrs.Index] = attrs.Statistics
+					lastTxBytes[attrs.Index] = attrs.Statistics.TxBytes
 				}
 			case <-logTimer.C:
-				indices := slices.Sorted(maps.Keys(lastStats))
+				indices := slices.Sorted(maps.Keys(lastDiff))
 				parts := make([]string, 0, len(indices))
 				for _, idx := range indices {
-					txBytes := lastStats[idx].TxBytes
-					parts = append(parts, fmt.Sprintf("%d: %s", idx, humanizeSize(txBytes)))
+					diff := lastDiff[idx]
+					parts = append(parts, fmt.Sprintf("%d: %s/%s", idx, humanizeSize(diff), clArgs.Interval))
 				}
 				log.Println(strings.Join(parts, ", "))
 			case <-stop:
