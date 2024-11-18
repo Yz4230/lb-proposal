@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
+	"maps"
 	"net"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -86,28 +88,35 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		timer := time.NewTicker(clArgs.Interval)
-		lastStats := make(map[int]*netlink.LinkStatistics) // map index -> stats
+		window := uint64(clArgs.Interval.Milliseconds())
+		statTimer := time.NewTicker(clArgs.Interval)
+		logTimer := time.NewTicker(1 * time.Second)
+		lastTxBytes := make(map[int]uint64) // map index -> tx bytes
+		lastDiff := make(map[int]uint64)    // map index -> metrics
 		for {
 			select {
-			case <-timer.C:
+			case <-statTimer.C:
 				links, err := netlink.LinkList()
 				if err != nil {
 					log.Fatalf("Failed to list links: %v", err)
 				}
-				var logs []string
 				for _, link := range links {
 					attrs := link.Attrs()
-					if lastStat, ok := lastStats[attrs.Index]; ok {
-						diff := attrs.Statistics.TxBytes - lastStat.TxBytes
+					if lastTxByte, ok := lastTxBytes[attrs.Index]; ok {
+						diff := (attrs.Statistics.TxBytes - lastTxByte) / window
 						objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(diff), ebpf.UpdateAny)
-						logs = append(logs, fmt.Sprintf("%s(%d): %d", attrs.Name, attrs.Index, diff))
+						lastDiff[attrs.Index] = uint64(diff)
 					}
-					lastStats[attrs.Index] = attrs.Statistics
+					lastTxBytes[attrs.Index] = attrs.Statistics.TxBytes
 				}
-				if len(logs) > 0 {
-					log.Printf("Link stats: %s", strings.Join(logs, ", "))
+			case <-logTimer.C:
+				indices := slices.Sorted(maps.Keys(lastDiff))
+				parts := make([]string, 0, len(indices))
+				for _, idx := range indices {
+					diff := lastDiff[idx]
+					parts = append(parts, fmt.Sprintf("%d: %s/%s", idx, humanizeSize(diff), clArgs.Interval))
 				}
+				log.Println(strings.Join(parts, ", "))
 			case <-stop:
 				return
 			}
@@ -126,4 +135,24 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func humanizeSize(size uint64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+	size /= 1024
+	if size < 1024 {
+		return fmt.Sprintf("%d KiB", size)
+	}
+	size /= 1024
+	if size < 1024 {
+		return fmt.Sprintf("%d MiB", size)
+	}
+	size /= 1024
+	if size < 1024 {
+		return fmt.Sprintf("%d GiB", size)
+	}
+	size /= 1024
+	return fmt.Sprintf("%d TiB", size)
 }

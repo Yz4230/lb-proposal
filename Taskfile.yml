@@ -19,12 +19,15 @@ tasks:
     cmds:
       - go build -o build/{{.BIN_NAME}}
   up:
-    deps:
-      - build
     cmds:
       - sudo ./scripts/tear_up.sh
       - sudo ./scripts/insert_srfunc_route.sh
+  start:
+    deps:
+      - build
+    cmds:
       - sudo ./scripts/insert_ebpf_routes.sh
+    interactive: true
   down:
     cmds:
       - sudo ./scripts/tear_down.sh
