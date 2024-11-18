@@ -54,17 +54,17 @@ int do_test_data(struct __sk_buff *skb) {
     bool match = false;
     if (metrics == 0) {
       u64 key = nic_index;
-      u64 *matrics_value = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
-      if (!matrics_value) {
+      u64 *metrics_value = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
+      if (!metrics_value) {
         ulogf("metrics not found: nic_index=%u", nic_index);
         return BPF_DROP;
       }
       if (comparator == 0)
-        match = (*matrics_value == bps);
+        match = (*metrics_value == bps);
       else if (comparator == 1)
-        match = (*matrics_value > bps);
+        match = (*metrics_value > bps);
       else if (comparator == 2)
-        match = (*matrics_value < bps);
+        match = (*metrics_value < bps);
       ulogf("match=%d, matrics_value=%llu, bps=%u", match, *matrics_value, bps);
     }
 
