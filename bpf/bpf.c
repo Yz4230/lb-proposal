@@ -65,7 +65,7 @@ int do_test_data(struct __sk_buff *skb) {
         match = (*metrics_value > bps);
       else if (comparator == 2)
         match = (*metrics_value < bps);
-      ulogf("match=%d, matrics_value=%llu, bps=%u", match, *matrics_value, bps);
+      ulogf("match=%d, matrics_value=%llu, bps=%u", match, *metrics_value, bps);
     }
 
     if (sr_hdr->segments_left == 0) return BPF_DROP;
