@@ -33,4 +33,4 @@ tasks:
       - sudo ./scripts/tear_down.sh
 
 vars:
-  BIN_NAME: ebpf-test
+  BIN_NAME: lb-proposal
