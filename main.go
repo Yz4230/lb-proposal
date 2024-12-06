@@ -103,6 +103,7 @@ func main() {
 		statTimer := time.NewTicker(clArgs.Interval)
 		logTimer := time.NewTicker(1 * time.Second)
 		lastTxBytes := make(map[int]uint64) // map index -> tx bytes
+		lastRxBytes := make(map[int]uint64) // map index -> rx bytes
 		emas := make(map[int]*EMA)          // map index -> EMA
 		for {
 			select {
@@ -113,21 +114,25 @@ func main() {
 				}
 				for _, link := range links {
 					attrs := link.Attrs()
+					stats := attrs.Statistics
 
-					current := attrs.Statistics.TxBytes
-					var diff float64
-					if prev, ok := lastTxBytes[attrs.Index]; ok {
-						diff = float64(current-prev) / float64(span)
+					bytesPerMs := 0.0
+					if last, ok := lastTxBytes[attrs.Index]; ok {
+						bytesPerMs += float64(stats.TxBytes-last) / float64(span)
 					}
-					lastTxBytes[attrs.Index] = current
+					lastTxBytes[attrs.Index] = stats.TxBytes
+					if last, ok := lastRxBytes[attrs.Index]; ok {
+						bytesPerMs += float64(stats.RxBytes-last) / float64(span)
+					}
+					lastRxBytes[attrs.Index] = stats.RxBytes
 
 					ema, ok := emas[attrs.Index]
 					if !ok {
 						ema = NewEMA(span)
 						emas[attrs.Index] = ema
 					}
-					ema.Update(diff)
-					objs.TxBytesPerSec.Update(uint32(attrs.Index), uint64(ema.GetValue()), ebpf.UpdateAny)
+					metric := ema.Update(bytesPerMs)
+					objs.XbytesPerSec.Update(uint32(attrs.Index), uint64(metric), ebpf.UpdateAny)
 				}
 			case <-logTimer.C:
 				indices := slices.Sorted(maps.Keys(emas))

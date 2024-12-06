@@ -15,7 +15,8 @@ struct {
   __type(key, __u32);
   __type(value, __u64);
   __uint(max_entries, 16);
-} tx_bytes_per_sec SEC(".maps");
+} xbytes_per_sec SEC(".maps");
+
 
 SEC("lwt_xmit/test_data")
 int do_test_data(struct __sk_buff *skb) {
@@ -54,7 +55,7 @@ int do_test_data(struct __sk_buff *skb) {
     bool match = false;
     if (metrics == 0) {
       u64 key = nic_index;
-      u64 *metrics_value = bpf_map_lookup_elem(&tx_bytes_per_sec, &key);
+      u64 *metrics_value = bpf_map_lookup_elem(&xbytes_per_sec, &key);
       if (!metrics_value) {
         ulogf("metrics not found: nic_index=%u", nic_index);
         return BPF_DROP;
