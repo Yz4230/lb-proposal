@@ -109,7 +109,7 @@ ip netns exec ns2 ip -6 route add fc00:b::/32 via fc00:b:32::
 ip netns exec ns2 ip -6 route add fc00:c::/32 via fc00:c:42::
 ip netns exec ns2 ip -6 route add fc00:d::/32 via fc00:b:32::
 ip netns exec ns2 ip -6 route add fc00:e::/32 via fc00:c:42::
-ip netns exec ns2 ip -6 route add fc00:f::/32 via fc00:c:42::
+ip netns exec ns2 ip -6 route add fc00:f::/32 via fc00:b:32::
 ip netns exec ns2 ip -6 route add fc00:aa::/32 via fc00:aa:72::
 ip netns exec ns2 ip -6 route add fc00:bb::/32 via fc00:b:32::
 ip netns exec ns3 ip -6 route add fc00:a::/32 via fc00:b:23::
