@@ -19,9 +19,9 @@ tasks:
     cmds:
       - go build -o build/{{.BIN_NAME}}
   up:
-    cmds:
-      - sudo ./scripts/tear_up.sh
-      - sudo ./scripts/insert_srfunc_route.sh
+    cmd: sudo ./scripts/tear_up.sh
+  up-sr:
+    cmd: sudo ./scripts/insert_srfunc_route.sh
   start:
     deps:
       - build
