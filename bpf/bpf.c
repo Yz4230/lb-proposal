@@ -17,6 +17,12 @@ struct {
   __uint(max_entries, 16);
 } xbytes_per_sec SEC(".maps");
 
+#ifdef DISABLE_ULOGF
+#ifdef ulogf
+#undef ulogf
+#define ulogf(fmt, ...) ({})
+#endif
+#endif
 
 SEC("lwt_xmit/test_data")
 int do_test_data(struct __sk_buff *skb) {
