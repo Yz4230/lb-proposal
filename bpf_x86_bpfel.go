@@ -60,8 +60,8 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	LogEntries   *ebpf.MapSpec `ebpf:"log_entries"`
-	XbytesPerSec *ebpf.MapSpec `ebpf:"xbytes_per_sec"`
+	LogEntries  *ebpf.MapSpec `ebpf:"log_entries"`
+	XbytesPerMs *ebpf.MapSpec `ebpf:"xbytes_per_ms"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -83,14 +83,14 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	LogEntries   *ebpf.Map `ebpf:"log_entries"`
-	XbytesPerSec *ebpf.Map `ebpf:"xbytes_per_sec"`
+	LogEntries  *ebpf.Map `ebpf:"log_entries"`
+	XbytesPerMs *ebpf.Map `ebpf:"xbytes_per_ms"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.LogEntries,
-		m.XbytesPerSec,
+		m.XbytesPerMs,
 	)
 }
 

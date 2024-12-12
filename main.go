@@ -64,7 +64,7 @@ func main() {
 	defer objs.Close()
 
 	bpfEncap := &netlink.BpfEncap{}
-	bpfEncap.SetProg(nl.LWT_BPF_XMIT, objs.DoTestData.FD(), "lwt_xmit/test_data")
+	bpfEncap.SetProg(nl.LWT_BPF_XMIT, objs.DoTestData.FD(), "lwt_xmit/proposal")
 	route := netlink.Route{
 		Dst:      clArgs.Prefix,
 		Encap:    bpfEncap,
@@ -99,7 +99,6 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		span := int(clArgs.Interval.Milliseconds())
 		statTimer := time.NewTicker(clArgs.Interval)
 		logTimer := time.NewTicker(1 * time.Second)
 		lastTxBytes := make(map[int]uint64) // map index -> tx bytes
@@ -118,21 +117,21 @@ func main() {
 
 					bytesPerMs := 0.0
 					if last, ok := lastTxBytes[attrs.Index]; ok {
-						bytesPerMs += float64(stats.TxBytes-last) / float64(span)
+						bytesPerMs += float64(stats.TxBytes-last) / float64(clArgs.Interval.Milliseconds())
 					}
 					lastTxBytes[attrs.Index] = stats.TxBytes
 					if last, ok := lastRxBytes[attrs.Index]; ok {
-						bytesPerMs += float64(stats.RxBytes-last) / float64(span)
+						bytesPerMs += float64(stats.RxBytes-last) / float64(clArgs.Interval.Milliseconds())
 					}
 					lastRxBytes[attrs.Index] = stats.RxBytes
 
 					ema, ok := emas[attrs.Index]
 					if !ok {
-						ema = NewEMA(span)
+						ema = NewEMA(10)
 						emas[attrs.Index] = ema
 					}
 					metric := ema.Update(bytesPerMs)
-					objs.XbytesPerSec.Update(uint32(attrs.Index), uint64(metric), ebpf.UpdateAny)
+					objs.XbytesPerMs.Update(uint32(attrs.Index), uint64(metric), ebpf.UpdateAny)
 				}
 			case <-logTimer.C:
 				indices := slices.Sorted(maps.Keys(emas))
