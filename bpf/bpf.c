@@ -15,7 +15,7 @@ struct {
   __type(key, __u32);
   __type(value, __u64);
   __uint(max_entries, 16);
-} xbytes_per_ms SEC(".maps");
+} bw_bits_per_sec SEC(".maps");
 
 #ifdef DISABLE_ULOGF
 #ifdef ulogf
@@ -52,28 +52,28 @@ int do_proposal(struct __sk_buff *skb) {
     u8 metrics = (arg >> 32) & 0xff;
     u8 comparator = (arg >> 24) & 0xff;
     u8 nic_index = (arg >> 16) & 0xff;
-    u16 bytes_per_ms = arg & 0xffff;
+    u16 mega_bits_per_sec = arg & 0xffff;
     ulogf(
         "SRH found: func=%04x, skip_num=%u, metrics=%u, comparator=%u, "
         "nic_index=%u, bps=%u",
-        func, num_skip, metrics, comparator, nic_index, bytes_per_ms);
+        func, num_skip, metrics, comparator, nic_index, mega_bits_per_sec);
 
     bool match = false;
     if (metrics == 0) {
       u64 key = nic_index;
-      u64 *metrics_value = bpf_map_lookup_elem(&xbytes_per_ms, &key);
+      u64 *metrics_value = bpf_map_lookup_elem(&bw_bits_per_sec, &key);
       if (!metrics_value) {
         ulogf("metrics not found: nic_index=%u", nic_index);
         return BPF_DROP;
       }
       if (comparator == 0)
-        match = (*metrics_value == bytes_per_ms);
+        match = (*metrics_value == mega_bits_per_sec);
       else if (comparator == 1)
-        match = (*metrics_value > bytes_per_ms);
+        match = (*metrics_value > mega_bits_per_sec);
       else if (comparator == 2)
-        match = (*metrics_value < bytes_per_ms);
+        match = (*metrics_value < mega_bits_per_sec);
       ulogf("match=%d, matrics_value=%llu, bps=%u", match, *metrics_value,
-            bytes_per_ms);
+            mega_bits_per_sec);
     }
 
     if (sr_hdr->segments_left == 0) return BPF_DROP;

@@ -1,13 +1,9 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
-	"maps"
 	"os"
 	"os/signal"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -70,11 +66,10 @@ func runProposal() error {
 	go func() {
 		defer wg.Done()
 		statTimer := time.NewTicker(flags.Interval)
-		intervalMs := flags.Interval.Milliseconds()
-		logTimer := time.NewTicker(1 * time.Second)
-		lastTxBytes := make(map[int]uint64) // map index -> tx bytes
-		lastRxBytes := make(map[int]uint64) // map index -> rx bytes
-		emas := make(map[int]*EMA)          // map index -> EMA
+		intervalSec := flags.Interval.Seconds()
+		lastBandwidth := make(map[int]float64) // map index -> bandwidth
+		emas := make(map[int]*EMA)             // map index -> EMA
+
 		for {
 			select {
 			case <-statTimer.C:
@@ -86,35 +81,23 @@ func runProposal() error {
 					attrs := link.Attrs()
 					stats := attrs.Statistics
 
-					bytesPerMs := 0.0
-					if last, ok := lastTxBytes[attrs.Index]; ok {
-						bytesPerMs += float64(stats.TxBytes-last) / float64(intervalMs)
+					bytesPerSec := 0.0
+					bandwidth := float64(stats.TxBytes + stats.RxBytes)
+					if last, ok := lastBandwidth[attrs.Index]; ok {
+						bytesPerSec = (bandwidth - last) / intervalSec
 					}
-					lastTxBytes[attrs.Index] = stats.TxBytes
-					if last, ok := lastRxBytes[attrs.Index]; ok {
-						bytesPerMs += float64(stats.RxBytes-last) / float64(intervalMs)
-					}
-					lastRxBytes[attrs.Index] = stats.RxBytes
+					lastBandwidth[attrs.Index] = bandwidth
 
-					ema, ok := emas[attrs.Index]
-					if !ok {
-						ema = NewEMA(10)
+					ema := emas[attrs.Index]
+					if ema == nil {
+						ema = NewEMA(1000)
 						emas[attrs.Index] = ema
 					}
-					metric := ema.Update(bytesPerMs)
-					objs.XbytesPerMs.Update(uint32(attrs.Index), uint64(metric), ebpf.UpdateAny)
+					megaBitsPerSec := bytesPerSec * 8 / 1e6
+					metric := ema.Update(megaBitsPerSec)
+
+					objs.BwBitsPerSec.Update(uint32(attrs.Index), uint64(metric), ebpf.UpdateAny)
 				}
-			case <-logTimer.C:
-				indices := slices.Sorted(maps.Keys(emas))
-				parts := make([]string, 0, len(indices))
-				for _, idx := range indices {
-					if ema, ok := emas[idx]; ok {
-						part := fmt.Sprintf("%s(%d): %s/%s",
-							idxToName[idx], idx, humanizeSize(uint64(ema.GetValue())), flags.Interval)
-						parts = append(parts, part)
-					}
-				}
-				log.Println(strings.Join(parts, ", "))
 			case <-stop:
 				return
 			}
