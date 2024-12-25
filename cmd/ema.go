@@ -1,4 +1,4 @@
-package main
+package cmd
 
 // EMA構造体
 type EMA struct {

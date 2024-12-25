@@ -4,16 +4,11 @@ tasks:
   gen-ebpf:
     sources:
       - "bpf/*.c"
-    generates:
-      - "*.o"
     cmds:
-      - go generate
+      - go generate ./...
   build:
     deps:
       - gen-ebpf
-    sources:
-      - "*.go"
-      - "*.o"
     generates:
       - "build/{{.BIN_NAME}}"
     cmds:
