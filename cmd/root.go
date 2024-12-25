@@ -11,11 +11,14 @@ import (
 )
 
 type Flags struct {
-	Prefix   net.IPNet
-	Gateway  net.IP
-	Interval time.Duration
-	LogLevel string
-	Debug    bool
+	Prefix      net.IPNet
+	Gateway     net.IP
+	Interval    time.Duration
+	EMASpan     int
+	LogLevel    string
+	LogRawStats bool
+	LogRawEMA   bool
+	Debug       bool
 }
 
 var flags Flags
@@ -53,9 +56,14 @@ func init() {
 	rootCmd.MarkFlagRequired("gateway")
 	rootCmd.Flags().DurationVarP(&flags.Interval, "interval", "i", time.Duration(0), "Interval")
 	rootCmd.MarkFlagRequired("interval")
+	rootCmd.Flags().IntVarP(&flags.EMASpan, "ema-span", "e", 100, "EMA span")
 
 	// Debug mode
 	rootCmd.Flags().BoolVarP(&flags.Debug, "debug", "d", false, "Debug mode")
 	// log level
 	rootCmd.Flags().StringVarP(&flags.LogLevel, "loglevel", "l", "info", "Log level (debug, info, warn, error, fatal)")
+	// log raw statistics
+	rootCmd.Flags().BoolVar(&flags.LogRawStats, "log-raw-stats", false, "Log raw statistics")
+	// log statistics
+	rootCmd.Flags().BoolVar(&flags.LogRawEMA, "log-raw-ema", false, "Log raw EMA")
 }
