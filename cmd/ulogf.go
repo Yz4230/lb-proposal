@@ -41,7 +41,6 @@ func handleULogF(stop chan struct{}, m *ebpf.Map) {
 		case ev := <-evCh:
 			log.Printf("%s", color.YellowString(string(ev)))
 		case <-stop:
-			log.Println("Stopping event reader")
 			stopped = true
 			<-done
 			return
