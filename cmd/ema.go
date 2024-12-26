@@ -1,10 +1,26 @@
-package main
+package cmd
+
+import "encoding/json"
 
 // EMA構造体
 type EMA struct {
 	alpha float64
 	value float64
 	init  bool
+}
+
+// MarshalJSONはEMA構造体をJSONに変換します
+func (e *EMA) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.value)
+}
+
+// UnmarshalJSONはJSONをEMA構造体に変換します
+func (e *EMA) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &e.value); err != nil {
+		return err
+	}
+	e.init = true
+	return nil
 }
 
 // NewEMAは新しいEMA計算用の構造体を作成します

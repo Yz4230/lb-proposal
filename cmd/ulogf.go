@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"errors"
@@ -39,9 +39,8 @@ func handleULogF(stop chan struct{}, m *ebpf.Map) {
 	for {
 		select {
 		case ev := <-evCh:
-			log.Printf(color.YellowString(string(ev)))
+			log.Printf("%s", color.YellowString(string(ev)))
 		case <-stop:
-			log.Println("Stopping event reader")
 			stopped = true
 			<-done
 			return

@@ -3,21 +3,18 @@ version: "3"
 tasks:
   gen-ebpf:
     sources:
-      - "bpf/*.c"
+      - bpf/*.c
     generates:
-      - "*.o"
-    cmds:
-      - go generate
+      - "**/*.o"
+    cmd: go generate ./...
   build:
     deps:
       - gen-ebpf
-    sources:
-      - "*.go"
-      - "*.o"
     generates:
-      - "build/{{.BIN_NAME}}"
-    cmds:
-      - go build -o build/{{.BIN_NAME}}
+      - build/{{.BIN_NAME}}
+    sources:
+      - "**/*.go"
+    cmd: go build -o build/{{.BIN_NAME}}
   up:
     cmd: sudo ./scripts/tear_up.sh
   up-sr:
@@ -25,12 +22,10 @@ tasks:
   start:
     deps:
       - build
-    cmds:
-      - sudo ./scripts/insert_ebpf_routes.sh
+    cmd: sudo ./scripts/insert_ebpf_routes.sh
     interactive: true
   down:
-    cmds:
-      - sudo ./scripts/tear_down.sh
+    cmd: sudo ./scripts/tear_down.sh
 
 vars:
   BIN_NAME: lb-proposal
