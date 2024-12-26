@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -150,7 +151,7 @@ func runProposal() error {
 	}()
 
 	interrupt := make(chan os.Signal, 5)
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	// Wait for the program to be interrupted.
 	<-interrupt
